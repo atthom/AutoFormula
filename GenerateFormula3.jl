@@ -228,7 +228,7 @@ function reduce_div(exp::Expr)
     elseif length(array_left) == 0
         new_left = 1 
     else
-        new_left = Expr(:call, left.args[1], array_left...)
+        new_left = Expr(:call, :*, array_left...)
     end
 
     if length(array_right) == 1
@@ -236,7 +236,7 @@ function reduce_div(exp::Expr)
     elseif length(array_right) == 0
         new_right = 1
     else
-        new_right = Expr(:call, right.args[1], array_right...)
+        new_right = Expr(:call, :*, array_right...)
     end
 
     return Expr(:call, :/, new_left, new_right)
@@ -283,11 +283,6 @@ function reducing(exp::Expr)
         exp = reduce_div(reduce_div2(exp))
     end
     exp = reduce_leaves(exp)
-    if exp.args[1] ∉ [:/, :*, :+, :-]
-        println(exp.args[1])
-        println(str_exp)
-        println(exp)
-    end
     return exp
 end
 
@@ -324,6 +319,7 @@ function oneExpr(cts, operators, next_level, null_potent, level)
     #ee = Expr(:call, :*, e, Expr(:call, ))
 
     for ex in res
+        println(ex.args)
         r = eval(ex)
         if 0 == real(r) && abs(imag(r)) < 1.e-4
             push!(null_potent, ex)
@@ -398,5 +394,13 @@ constants = vcat(constants, physics)
 
 #labels = Dict(item[1] => item[2] for item in zip(constants, names))
 
-@time oneExpr(constants, operators, constants, Set(), level)
+
+test_diva = Expr(:call, :*, 1, 2)
+test_divb = Expr(:call, :*, 2, 3, 6)
+test_div = Expr(:call, :/, test_diva, test_divb)
+
+println(expr2string(test_div))
+test_div = reduce_leaves(test_div)
+println(expr2string(test_div))
+#@time oneExpr(constants, operators, constants, Set(), level)
 
