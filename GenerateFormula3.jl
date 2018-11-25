@@ -130,12 +130,13 @@ function reduce_leaves(exp::Expr)
             if elem.args[1] in [:^, :/] && elem.args[3] == 1
                 elem = elem.args[2]
             elseif elem.args[1] == :*
-                elem.args = filter(vals -> vals != 1, elem.args)
-                if length(elem.args) == 2
-                    deleteat!(exp.args, i)
-                    exp.args = vcat(exp.args, elem.args[2:end]) 
-                elseif length(elem.args) == 1
-                    exp.args[i] = 1
+                args = filter(vals -> vals != 1, elem.args[2:end])
+                if length(args) == 0
+                    exp.args[i+1] = 1
+                elseif length(args) == 1
+                    exp.args[i+1] = args[1]
+                else
+                    exp.args[i+1] = Expr(:call, :*, args...) 
                 end
             end
         end
@@ -276,7 +277,6 @@ function containSameCts(expr::Expr)
 end
 
 function reducing(exp::Expr)
-    str_exp = expr2string(exp)
     if exp.args[1] in [:+, :*]
         exp = reduce_add_mul(exp)
     elseif exp.args[1] == :/
@@ -312,22 +312,16 @@ function oneExpr(cts, operators, next_level, null_potent, level)
     println(length(res))
     res = Iterators.unique(res)
     println(length(res))
-    level = level + 1
-    println("a")
-
-    
+    level = level + 1    
     #ee = Expr(:call, :*, e, Expr(:call, ))
 
     for ex in res
-        println(ex.args)
         r = eval(ex)
         if 0 == real(r) && abs(imag(r)) < 1.e-4
             push!(null_potent, ex)
         end
     end
     
-    println("b")
-
     for exp in null_potent
         println(expr2string(exp), " ", eval(exp))
     end
@@ -399,8 +393,7 @@ test_diva = Expr(:call, :*, 1, 2)
 test_divb = Expr(:call, :*, 2, 3, 6)
 test_div = Expr(:call, :/, test_diva, test_divb)
 
-println(expr2string(test_div))
 test_div = reduce_leaves(test_div)
-println(expr2string(test_div))
-#@time oneExpr(constants, operators, constants, Set(), level)
+
+@time oneExpr(constants, operators, constants, Set(), level)
 
