@@ -1,4 +1,5 @@
 using Base.MathConstants
+using Profile
 #using AlgebraicNumbers
 
 import Base.==
@@ -36,12 +37,12 @@ cFeigenbaum = 4.6692016091
 math = [cRS, cEB, cGolden, csqrt2, cPlastique, cMills, cConway, cGK, 
     cApery, cKL, cK, cBrun, cGauss, cLR, cET, clp, crobb,
     cpj, cC, cCD, cEM, comega, cHSM, cGKW, cbern, cmm,
-    cKhintchine, cFeigenbaum]
+    cKhintchine, cFeigenbaum, γ, φ, catalan]
 
 math_names = ["cRS", "cEB", "cGolden", "csqrt2", "cPlastique", "cMills", "cConway", "cGK", 
     "cApery", "cKL", "cK", "cBrun", "cGauss", "cLR", "cET", "clp", "crobb",
     "cpj", "cC", "cCD", "cEM", "comega", "cHSM", "cGKW", "cbern", "cmm",
-    "cKhintchine", "cFeigenbaum"]
+    "cKhintchine", "cFeigenbaum", "γ", "φ", "catalan"]
 
 coulomb = 8.987551787e9
 ce = 1.602176620e-19
@@ -68,8 +69,8 @@ physics_names = ["coulomb", "ce", "cG", "cbolzman",
     "cpermeability_magne", "cpermeability_elec",
     "cplanck", "cplanck_reduit", "cc","cimped"]
 
-constants = Array{Complex{Real}}([e, 1, 1im, pi, γ, φ, catalan])
-names = Array{String}(["e", "1", "i", "pi", "γ", "φ", "catalan"])
+constants = Array{Complex{Real}}([e, 1, 1im, pi])
+cts_names = Array{String}(["e", "1", "i", "pi"])
 
 
 
@@ -171,6 +172,12 @@ function reduce_leaves(exp::Expr)
                 exp = Expr(:call, :/, Expr(:call, :*, elem_left...), elem_right)
                 break
             end
+        end
+    end
+
+    if exp.args[1] == :/
+        if typeof(exp.args[2]) == Expr && exp.args[3] == 1
+            exp = exp.args[2]
         end
     end
 
@@ -302,6 +309,7 @@ function applyOperator(left, operators, right)
     return Iterators.map(x -> Expr(:call, Symbol(x[2]), x[1], x[3]), prod)
 end
 
+
 function oneExpr(cts, operators, next_level, null_potent, level)
     level = level + 1
     next_level2 = applyFunct(next_level)
@@ -312,17 +320,17 @@ function oneExpr(cts, operators, next_level, null_potent, level)
     res = Iterators.vcat(prod1..., prod2...)
     res = Iterators.filter(expr -> !containSameCts(expr), res)
     res = Iterators.filter(expr -> !isNullPotent(expr, null_potent), res)
-    res = collect(res)
-    println(length(res))
+    #res = collect(res)
+    #println(length(res))
     res = Iterators.map(x -> reducing(x), res)
-    println(length(res))
+    #println(length(res))
     res = Iterators.unique(res)
-    println(length(res))
+    #println(length(res))
 
-    for ex in res
-        r = eval(ex)
+    for exp in res
+        r = eval(exp)
         if 0 == real(r) && abs(imag(r)) < 1.e-4
-            push!(null_potent, ex)
+            push!(null_potent, exp)
         end
     end
     
@@ -334,66 +342,20 @@ function oneExpr(cts, operators, next_level, null_potent, level)
         return
     end
 
+
+    println("Result size: ", length(res), " Null size: ", length(null_potent))
+
     oneExpr(cts, operators, res, null_potent, level)
 end
 
-the_good_one = Expr(:call, :*, pi + 0im, 1im)
-the_good_one = Expr(:call, :^, e + 0im, the_good_one)
-the_good_one = Expr(:call, :+, 1 + 0im, the_good_one)
-#println(expr2string(the_good_one), " ", eval(the_good_one))
-
-null_potent = Expr(:call, :*, 1im, 1im)
-null_potent = Expr(:call, :^, 1im, null_potent)
-test = Expr(:call, :^, 1im, null_potent)
-
-reduce = Expr(:call, :*, 1im, pi + 0im)
-reduce = Expr(:call, :/, pi + 0im, reduce)
-
-reduce = Expr(:call, :/, pi + 0im, 1im)
-reduce = Expr(:call, :/, pi + 0im, reduce)
-
-reduce = Expr(:call, :/, 1im, pi + 0im)
-reduce = Expr(:call, :/, pi + 0im, reduce)
-
-#println(expr2string(reduce))
-#reduce = reduce_div(reduce)
-#println(expr2string(reduce))
-#println(isNullPotent(test, [null_potent]))
-
-
-null = Expr(:call, :/, 1, 1im)
-null = Expr(:call, :+, 1im, null)
-
-
-
-null2 = Expr(:call, :/, 1, 1im)
-null2 = Expr(:call, :+, 1im, null2)
-
-null = Expr(:call, :+, 1im, 1)
-
-null2 = Expr(:call, :+, 1, 1im)
-
-
-#println(expr2string(null), expr2string(null2), null==null2, null===null2)
 
 constants = vcat(constants, math)
-names = vcat(names, math_names)
+cts_names = vcat(cts_names, math_names)
 
 constants = vcat(constants, physics)
-names = vcat(names, physics_names)
+cts_names = vcat(cts_names, physics_names)
 
-#square(x) = x*x
-
-#functions = [sqrt, square]
-
-
-test_diva = Expr(:call, :*, 1, 2)
-test_divb = Expr(:call, :*, 2, 3, 6)
-test_div = Expr(:call, :/, test_diva, test_divb)
-#test_div = reduce_leaves(test_div)
-#constants = map(ct -> AlgebraicNumber(ct), cts)
-labels = Dict(item[1] => item[2] for item in zip(constants, names))
-
+labels = Dict(item[1] => item[2] for item in zip(constants, cts_names))
 
 Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
 
@@ -401,8 +363,12 @@ Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
     return 0
 end
 
+@time oneExpr(constants, operators, constants, Set(), level)
 
-julia_main(Vector{String}([]))
-
+#using Profile
+#Profile.clear()  # in case we have any previous profiling data
+#@profile oneExpr(constants, operators, constants, Set(), level)
+#using ProfileView
+#ProfileView.view()
 #println(sqrt(AlgebraicNumber(2))^2 == 2)
 #println(sqrt(2)^2 == 2)
