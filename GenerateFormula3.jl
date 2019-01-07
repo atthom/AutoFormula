@@ -182,7 +182,6 @@ function reduce_leaves(exp::Expr)
     end
 
     return exp
-
 end
 
 function reduce_div2(expr::Expr)
@@ -309,6 +308,22 @@ function applyOperator(left, operators, right)
     return Iterators.map(x -> Expr(:call, Symbol(x[2]), x[1], x[3]), prod)
 end
 
+function expr2file(expr)
+    println(expr)
+    return expr2string(expr) * " -> " * String(string(expr)) * "\n"
+end
+
+
+function save_to_file(null_potent)
+    if isempty(null_potent)
+        println("Not saving, null_potent is empty...")
+    else
+        println("Saving expressions...")
+        str_array = Iterators.mapreduce(expr2file, *, null_potent)
+        write(open("save_null_potent.txt", "w"), str_array)
+        println(expr2string(null_potent[1]), " ", expr2string(null_potent[end]))
+    end
+end
 
 function oneExpr(cts, operators, next_level, null_potent, level)
     level = level + 1
@@ -320,12 +335,8 @@ function oneExpr(cts, operators, next_level, null_potent, level)
     res = Iterators.vcat(prod1..., prod2...)
     res = Iterators.filter(expr -> !containSameCts(expr), res)
     res = Iterators.filter(expr -> !isNullPotent(expr, null_potent), res)
-    #res = collect(res)
-    #println(length(res))
     res = Iterators.map(x -> reducing(x), res)
-    #println(length(res))
     res = Iterators.unique(res)
-    #println(length(res))
 
     for exp in res
         r = eval(exp)
@@ -334,16 +345,12 @@ function oneExpr(cts, operators, next_level, null_potent, level)
         end
     end
     
-    for exp in null_potent
-        println(expr2string(exp), " ", eval(exp))
-    end
-
+    save_to_file(null_potent)
+    println("Result size: ", length(res), " Null size: ", length(null_potent))
+    
     if level == 2
         return
     end
-
-
-    println("Result size: ", length(res), " Null size: ", length(null_potent))
 
     oneExpr(cts, operators, res, null_potent, level)
 end
@@ -352,8 +359,8 @@ end
 constants = vcat(constants, math)
 cts_names = vcat(cts_names, math_names)
 
-constants = vcat(constants, physics)
-cts_names = vcat(cts_names, physics_names)
+#constants = vcat(constants, physics)
+#cts_names = vcat(cts_names, physics_names)
 
 labels = Dict(item[1] => item[2] for item in zip(constants, cts_names))
 
@@ -363,7 +370,7 @@ Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
     return 0
 end
 
-@time oneExpr(constants, operators, constants, Set(), level)
+@time oneExpr(constants, operators, constants, [], level)
 
 #using Profile
 #Profile.clear()  # in case we have any previous profiling data
