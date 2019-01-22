@@ -34,14 +34,14 @@ cGolden = 1.6180339887
 cKhintchine = 2.685452001
 cFeigenbaum = 4.6692016091 
 
-math = [cRS, cEB, cGolden, csqrt2, cPlastique, cMills, cConway, cGK, 
-    cApery, cKL, cK, cBrun, cGauss, cLR, cET, clp, crobb,
-    cpj, cC, cCD, cEM, comega, cHSM, cGKW, cbern, cmm,
+math = [cRS, cEB, csqrt2, cPlastique, cMills, cConway, cGK, 
+    cApery, cKL, cBrun, cGauss, cLR, cET, clp, crobb,
+    cpj, cC, cCD, comega, cHSM, cGKW, cbern, cmm,
     cKhintchine, cFeigenbaum, γ, φ, catalan]
 
-math_names = ["cRS", "cEB", "cGolden", "csqrt2", "cPlastique", "cMills", "cConway", "cGK", 
-    "cApery", "cKL", "cK", "cBrun", "cGauss", "cLR", "cET", "clp", "crobb",
-    "cpj", "cC", "cCD", "cEM", "comega", "cHSM", "cGKW", "cbern", "cmm",
+math_names = ["cRS", "cEB", "csqrt2", "cPlastique", "cMills", "cConway", "cGK", 
+    "cApery", "cKL", "cBrun", "cGauss", "cLR", "cET", "clp", "crobb",
+    "cpj", "cC", "cCD", "comega", "cHSM", "cGKW", "cbern", "cmm",
     "cKhintchine", "cFeigenbaum", "γ", "φ", "catalan"]
 
 coulomb = 8.987551787e9
@@ -69,9 +69,9 @@ physics_names = ["coulomb", "ce", "cG", "cbolzman",
     "cpermeability_magne", "cpermeability_elec",
     "cplanck", "cplanck_reduit", "cc","cimped"]
 
-constants = Array{Complex{Real}}([e, 1, 1im, pi])
-cts_names = Array{String}(["e", "1", "i", "pi"])
-
+constants = Array{Rational}([e, 1, pi])
+cts_names = Array{String}(["e", "1", "pi"])
+#i removed
 
 
 operators = [*, +, /, -]
@@ -118,7 +118,6 @@ function ==(a::Expr, b::Expr)
     else 
         return hash(a) == hash(b)
     end
-    
 end
 
 function reduce_add_mul(exp::Expr)
@@ -131,11 +130,13 @@ function reduce_add_mul(exp::Expr)
     return exp
 end
 
+null2 = Expr(:call, :/, cGolden, 1)
+
 function reduce_leaves(exp::Expr)
     for (i, elem) in enumerate(exp.args[2:end])
         if typeof(elem) == Expr
             if elem.args[1] in [:^, :/] && elem.args[3] == 1
-                elem = elem.args[2]
+                exp.args[i+1] = elem.args[2]
             elseif elem.args[1] == :*
                 args = filter(vals -> vals != 1, elem.args[2:end])
                 if length(args) == 0
@@ -309,19 +310,16 @@ function applyOperator(left, operators, right)
 end
 
 function expr2file(expr)
-    println(expr)
-    return expr2string(expr) * " -> " * String(string(expr)) * "\n"
+    return String(string(eval(expr))) * "; " * expr2string(expr) * "; " * String(string(expr)) * "\n"
 end
 
-
-function save_to_file(null_potent)
+function save_to_file(null_potent, file_name)
     if isempty(null_potent)
         println("Not saving, null_potent is empty...")
     else
         println("Saving expressions...")
         str_array = Iterators.mapreduce(expr2file, *, null_potent)
-        write(open("save_null_potent.txt", "w"), str_array)
-        println(expr2string(null_potent[1]), " ", expr2string(null_potent[end]))
+        write(open(file_name * ".txt", "w"), str_array)
     end
 end
 
@@ -329,35 +327,44 @@ function oneExpr(cts, operators, next_level, null_potent, level)
     level = level + 1
     next_level2 = applyFunct(next_level)
 
-    prod1 = applyOperator(cts, operators, next_level)
-    prod2 = applyOperator(next_level, operators, cts)
+    prod1 = applyOperator(cts, operators, next_level) # 5.160 ms 448.203 ms
+    prod2 = applyOperator(next_level, operators, cts) # 5.198 ms 402.022 ms
 
-    res = Iterators.vcat(prod1..., prod2...)
-    res = Iterators.filter(expr -> !containSameCts(expr), res)
-    res = Iterators.filter(expr -> !isNullPotent(expr, null_potent), res)
-    res = Iterators.map(x -> reducing(x), res)
-    res = Iterators.unique(res)
+    res = Iterators.vcat(prod1..., prod2...) # 31.118 μs 9.209 ms
+
+    res = Iterators.filter(expr -> !containSameCts(expr), res) # 4.491 ns 4.812 ns
+    res = Iterators.filter(expr -> !isNullPotent(expr, null_potent), res) # 9.624 ns  4.812 ns
+
+    res = reducing.(res) # 10.338 ms 2.590 s
+    res = Iterators.unique(res) # 20.072 ms #2.268 s
+
 
     for exp in res
         r = eval(exp)
-        if 0 == real(r) && abs(imag(r)) < 1.e-4
+        if abs(real(r)) < 1.e-4 && abs(imag(r)) < 1.e-4
             push!(null_potent, exp)
         end
     end
     
-    save_to_file(null_potent)
+    save_to_file(null_potent, "null_potent")
+    #save_to_file(res, "res")
     println("Result size: ", length(res), " Null size: ", length(null_potent))
     
-    if level == 2
+    if level == 3
         return
     end
 
-    oneExpr(cts, operators, res, null_potent, level)
+    @time oneExpr(cts, operators, res, null_potent, level)
 end
 
 
 constants = vcat(constants, math)
 cts_names = vcat(cts_names, math_names)
+
+opp(x) = -x
+#@vectorize_1arg Number opp(x)
+linear = vcat(constants, opp.(constants))
+println(linear)
 
 #constants = vcat(constants, physics)
 #cts_names = vcat(cts_names, physics_names)
@@ -366,10 +373,38 @@ labels = Dict(item[1] => item[2] for item in zip(constants, cts_names))
 
 Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
 
-    @time oneExpr(constants, operators, constants, Set(), level)
+    oneExpr(constants, operators, constants, Set(), level)
     return 0
 end
 
+
+function mergeDiv(exp::Expr)
+    left = exp.args[2]
+    right = exp.args[3]
+    if typeof(left) == Expr && left.args[1] == :/
+        println("no")
+    elseif typeof(right) == Expr && right.args[1] == :/
+        new_exp = Expr(:call, :*, left, right.args[3])
+        new_exp = Expr(:call, exp.args[1], new_exp, right.args[2])
+        exp = Expr(:call, :/, new_exp, right.args[3])
+    end
+
+    return exp
+end
+
+exp1 = Expr(:call, :-, 0.915965594177219, Expr(:call, :*, cET, cConway))
+exp2 = Expr(:call, :-, cET, Expr(:call, :/, 0.915965594177219, cConway))
+
+
+ex1 = Expr(:call, :/, exp2, exp1)
+ex2 = Expr(:call, :/, exp1, exp2)
+
+println(expr2string(ex1))
+println(expr2string(ex2))
+println(ex1 == ex2)
+
+println(ex1.args[2] == ex2.args[3])
+println(ex1.args[3] == ex2.args[2])
 @time oneExpr(constants, operators, constants, [], level)
 
 #using Profile
